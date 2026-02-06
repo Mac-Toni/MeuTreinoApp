@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, TouchableOpacity, ScrollView, 
   SafeAreaView, StatusBar, Alert, TextInput, KeyboardAvoidingView, 
-  Platform, Clipboard 
+  Platform, Modal 
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Clipboard from 'expo-clipboard'; // Novo import moderno
 
 const ExercicioItem = React.memo(({ item, onToggle, onWeightChange }) => {
   return (
@@ -39,6 +40,8 @@ const ExercicioItem = React.memo(({ item, onToggle, onWeightChange }) => {
 export default function App() {
   const [grupoAtual, setGrupoAtual] = useState('Treino A');
   const [carregando, setCarregando] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [textoBackup, setTextoBackup] = useState('');
   
   const [treinos, setTreinos] = useState({
     'Treino A': [
@@ -130,21 +133,30 @@ export default function App() {
     }));
   }, [grupoAtual]);
 
-  const exportarBackup = () => {
-    Clipboard.setString(JSON.stringify(treinos));
+  // Função de exportar atualizada
+  const exportarBackup = async () => {
+    await Clipboard.setStringAsync(JSON.stringify(treinos));
     Alert.alert("Backup Copiado! 📤", "Cole o código em um local seguro.");
   };
 
   const importarBackup = () => {
-    Alert.prompt("Importar Backup 📥", "Cole o código de backup:", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Confirmar", onPress: (texto) => {
-          try {
-            const dados = JSON.parse(texto);
-            if (dados['Treino A']) { setTreinos(dados); Alert.alert("Sucesso!"); }
-          } catch (e) { Alert.alert("Erro no código."); }
-      }}
-    ], "plain-text");
+    setTextoBackup('');
+    setModalVisible(true);
+  };
+
+  const confirmarImportacao = () => {
+    try {
+      const dados = JSON.parse(textoBackup);
+      if (dados['Treino A']) { 
+        setTreinos(dados); 
+        setModalVisible(false);
+        Alert.alert("Sucesso!", "Seus pesos e treinos foram restaurados."); 
+      } else {
+        Alert.alert("Erro", "Código inválido.");
+      }
+    } catch (e) {
+      Alert.alert("Erro", "Não conseguimos ler esse código.");
+    }
   };
 
   const resetarTreino = () => {
@@ -172,13 +184,12 @@ export default function App() {
       <StatusBar barStyle="light-content" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.header}>
-          <Text style={styles.titulo}>🏋️ Meu Treino</Text>
+          <Text style={styles.titulo}>🏋️ AG Strength</Text>
           <TouchableOpacity style={styles.botaoLimparTopo} onPress={resetarTreino}>
             <Text style={styles.textoLimparTopo}>Limpar</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Nossos novos botões de Backup */}
         <View style={styles.containerBackup}>
           <TouchableOpacity style={styles.botaoBackup} onPress={exportarBackup}>
             <Text style={styles.textoBackup}>📤 Exportar Dados</Text>
@@ -207,6 +218,36 @@ export default function App() {
           ))}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalText}>Importar Backup</Text>
+            <TextInput
+              style={styles.inputModal}
+              placeholder="Cole o código aqui..."
+              placeholderTextColor="#666"
+              multiline
+              value={textoBackup}
+              onChangeText={setTextoBackup}
+            />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity style={[styles.botaoModal, { backgroundColor: '#444' }]} onPress={() => setModalVisible(false)}>
+                <Text style={{ color: '#fff' }}>Voltar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.botaoModal, { backgroundColor: '#007AFF' }]} onPress={confirmarImportacao}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Importar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -237,5 +278,10 @@ const styles = StyleSheet.create({
   check: { fontSize: 14, marginLeft: 8 },
   containerPeso: { flexDirection: 'row', alignItems: 'center', marginLeft: 10, backgroundColor: '#252525', paddingHorizontal: 8, borderRadius: 6, height: 40 },
   inputPeso: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', width: 42 },
-  labelPeso: { color: '#888', fontSize: 12, marginLeft: 2 }
+  labelPeso: { color: '#888', fontSize: 12, marginLeft: 2 },
+  centeredView: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)' },
+  modalView: { width: '90%', backgroundColor: '#1e1e1e', borderRadius: 20, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  modalText: { marginBottom: 15, color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  inputModal: { width: '100%', height: 120, backgroundColor: '#252525', borderRadius: 10, color: '#fff', padding: 10, marginBottom: 20, textAlignVertical: 'top' },
+  botaoModal: { borderRadius: 10, padding: 12, flex: 1, alignItems: 'center' }
 });
